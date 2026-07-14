@@ -1,0 +1,8 @@
+{
+  "name": "Al-Safa Masjid Portal",
+  "description": "An interactive community portal for Al-Safa Masjid featuring dynamic prayer schedule trackers, Qibla compass finders, Madrasa Academy enrollment, counseling reservations, community event RSVPs with virtual admission tickets, and a multi-project secure donation center. Full English and Urdu translation support with RTL alignments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
