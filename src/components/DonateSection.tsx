@@ -12,7 +12,7 @@ export default function DonateSection({ lang }: DonateSectionProps) {
 
   // Donation State
   const [frequency, setFrequency] = useState<'oneTime' | 'monthly' | 'weekly'>('oneTime');
-  const [selectedAmount, setSelectedAmount] = useState<number | 'custom'>(50);
+  const [selectedAmount, setSelectedAmount] = useState<number | 'custom'>(1000);
   const [customAmount, setCustomAmount] = useState('');
   const [selectedFund, setSelectedFund] = useState('general');
 
@@ -64,7 +64,7 @@ export default function DonateSection({ lang }: DonateSectionProps) {
     setCardExpiry('');
     setCardCvv('');
     setCustomAmount('');
-    setSelectedAmount(50);
+    setSelectedAmount(1000);
   };
 
   const getFundLabel = (fundKey: string) => {
@@ -125,7 +125,7 @@ export default function DonateSection({ lang }: DonateSectionProps) {
               <div className="flex justify-between">
                 <span className="text-slate-400">{lang === 'ur' ? 'رقم' : 'Donation Amount'}</span>
                 <span className="font-bold text-emerald-700 dark:text-emerald-400 text-lg">
-                  ${receipt.amount.toFixed(2)} USD
+                  Rs {receipt.amount.toLocaleString(lang === 'ur' ? 'ur-PK' : 'en-US')} PKR
                 </span>
               </div>
 
@@ -212,7 +212,7 @@ export default function DonateSection({ lang }: DonateSectionProps) {
                 {t('selectAmount')}
               </h4>
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                {[10, 50, 100, 250].map((amt) => (
+                {[1000, 5000, 10000, 25000].map((amt) => (
                   <button
                     key={amt}
                     onClick={() => setSelectedAmount(amt)}
@@ -222,7 +222,7 @@ export default function DonateSection({ lang }: DonateSectionProps) {
                         : 'bg-slate-50 border-slate-200 dark:bg-slate-950 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-emerald-500/40'
                     }`}
                   >
-                    ${amt}
+                    Rs {amt.toLocaleString(lang === 'ur' ? 'ur-PK' : 'en-US')}
                   </button>
                 ))}
                 <button
@@ -240,14 +240,14 @@ export default function DonateSection({ lang }: DonateSectionProps) {
               {/* Custom amount text input (English/Urdu placeholded) */}
               {selectedAmount === 'custom' && (
                 <div className="relative mt-3 animate-fade-in">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">Rs</span>
                   <input
                     type="number"
                     required
                     value={customAmount}
                     onChange={(e) => setCustomAmount(e.target.value)}
                     placeholder={t('placeholderCustomAmount')}
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-sm py-3 pl-8 pr-4 rounded-xl border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full bg-slate-50 dark:bg-slate-950 text-sm py-3 pl-10 pr-4 rounded-xl border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
               )}

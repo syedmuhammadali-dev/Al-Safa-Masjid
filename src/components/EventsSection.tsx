@@ -55,8 +55,17 @@ const STATIC_EVENTS: CommunityEvent[] = [
   }
 ];
 
+const CATEGORY_LABEL_KEYS = {
+  lecture: 'lectures',
+  workshop: 'workshops',
+  ramadan: 'ramadan',
+  youth: 'youthCat',
+  sisters: 'sistersOnly'
+} as const;
+
 export default function EventsSection({ lang }: EventsSectionProps) {
   const t = (key: keyof typeof translations['en']) => translations[lang][key];
+  const categoryLabel = (category: keyof typeof CATEGORY_LABEL_KEYS) => t(CATEGORY_LABEL_KEYS[category]);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -178,7 +187,7 @@ export default function EventsSection({ lang }: EventsSectionProps) {
                     className="w-full h-full object-cover brightness-95"
                   />
                   <div className="absolute top-4 left-4 bg-emerald-600 text-white font-sans font-bold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full shadow">
-                    {t(ev.category as any)}
+                    {categoryLabel(ev.category)}
                   </div>
                 </div>
 
@@ -328,7 +337,7 @@ export default function EventsSection({ lang }: EventsSectionProps) {
               <div className="space-y-4 animate-fade-in">
                 <div>
                   <span className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 font-sans font-semibold text-xs px-3 py-1 rounded-full uppercase tracking-wider">
-                    {t(selectedEvent.category as any)}
+                    {categoryLabel(selectedEvent.category)}
                   </span>
                   <h4 className="font-display text-xl sm:text-2xl font-bold text-emerald-950 dark:text-emerald-400 mt-2">
                     {lang === 'ur' ? 'تقریب رجسٹریشن' : 'RSVP for Event'}

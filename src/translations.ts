@@ -108,7 +108,7 @@ export const translations = {
     placeholderCardNum: "0000 0000 0000 0000",
     placeholderExpiry: "MM/YY",
     placeholderCvv: "123",
-    placeholderCustomAmount: "Enter custom amount in USD",
+    placeholderCustomAmount: "Enter custom amount in PKR",
     
     // Madrasa Screen
     madrasaPortal: "Madrasa Academy Portal",
@@ -313,7 +313,7 @@ export const translations = {
     placeholderCardNum: "0000 0000 0000 0000",
     placeholderExpiry: "مہینہ/سال",
     placeholderCvv: "123",
-    placeholderCustomAmount: "ڈالر میں اپنی پسند کی رقم لکھیں",
+    placeholderCustomAmount: "روپے میں اپنی پسند کی رقم لکھیں",
     
     // Madrasa Screen
     madrasaPortal: "مدرسہ اکیڈمی پورٹل",
