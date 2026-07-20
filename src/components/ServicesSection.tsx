@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { translations } from '../translations';
 import { Language, ServiceBooking } from '../types';
-import { BookOpen, Sparkles, Users, CheckCircle2, ChevronRight, Lock, Calendar, Clock, UserCheck } from 'lucide-react';
+import { BookOpen, Sparkles, Users, CheckCircle2, ChevronRight, Lock } from 'lucide-react';
 
 interface ServicesSectionProps {
   lang: Language;

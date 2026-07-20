@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { translations } from './translations';
 import { Language } from './types';
-import { Sun, Moon, Globe, Heart, Menu, X, Landmark, ArrowUp } from 'lucide-react';
+import { Sun, Moon, Globe, Heart, Menu, X, ArrowUp } from 'lucide-react';
 
 // Import modular sections
 import HomeSection from './components/HomeSection';

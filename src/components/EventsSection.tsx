@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { translations } from '../translations';
 import { Language, CommunityEvent } from '../types';
-import { Search, Calendar, Clock, MapPin, CheckCircle2, Ticket, Sparkles, X } from 'lucide-react';
+import { Search, Calendar, Clock, MapPin, CheckCircle2, Ticket, X } from 'lucide-react';
 
 interface EventsSectionProps {
   lang: Language;

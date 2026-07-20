@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { translations } from '../translations';
 import { Language, DailyTracker, PrayerTime } from '../types';
-import { Clock, Compass, CheckCircle2, ChevronRight, HelpCircle, Sun, Moon } from 'lucide-react';
+import { Clock, Compass, CheckCircle2, Sun, Moon } from 'lucide-react';
 
 interface PrayerSectionProps {
   lang: Language;

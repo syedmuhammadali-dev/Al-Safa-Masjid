@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { translations } from '../translations';
 import { Language, StudentReport } from '../types';
-import { Search, GraduationCap, Calendar, Users, Award, BookOpen, Star, HelpCircle } from 'lucide-react';
+import { Search, GraduationCap, BookOpen, HelpCircle } from 'lucide-react';
 
 interface MadrasaSectionProps {
   lang: Language;
