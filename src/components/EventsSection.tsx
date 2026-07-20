@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { translations } from '../translations';
 import { Language, CommunityEvent } from '../types';
+import { showAlert } from '../swal';
 import { Search, Calendar, Clock, MapPin, CheckCircle2, Ticket, X } from 'lucide-react';
 
 interface EventsSectionProps {
@@ -318,7 +319,11 @@ export default function EventsSection({ lang }: EventsSectionProps) {
                 <div className="flex gap-3">
                   <button
                     onClick={() => {
-                      alert(lang === 'ur' ? 'ٹکٹ پی ڈی ایف ڈاؤن لوڈ سمیولیٹ کیا گیا ہے!' : 'Ticket PDF Download simulated!');
+                      showAlert({
+                        icon: 'success',
+                        title: lang === 'ur' ? 'ڈاؤن لوڈ' : 'Download',
+                        text: lang === 'ur' ? 'ٹکٹ پی ڈی ایف ڈاؤن لوڈ سمیولیٹ کیا گیا ہے!' : 'Ticket PDF Download simulated!',
+                      });
                     }}
                     className="flex-grow bg-emerald-600 hover:bg-emerald-500 text-white font-sans font-semibold py-3 rounded-xl transition-all"
                   >

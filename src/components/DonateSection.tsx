@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { translations } from '../translations';
 import { Language } from '../types';
+import { showAlert } from '../swal';
 import { Heart, CreditCard, CheckCircle2, ShieldCheck, Landmark, Receipt, Download, X } from 'lucide-react';
 
 interface DonateSectionProps {
@@ -39,7 +40,11 @@ export default function DonateSection({ lang }: DonateSectionProps) {
 
     const finalAmount = selectedAmount === 'custom' ? parseFloat(customAmount) : selectedAmount;
     if (isNaN(finalAmount) || finalAmount <= 0) {
-      alert(lang === 'ur' ? 'برائے مہربانی درست رقم درج کریں۔' : 'Please select or enter a valid donation amount.');
+      showAlert({
+        icon: 'warning',
+        title: lang === 'ur' ? 'غلط رقم' : 'Invalid Amount',
+        text: lang === 'ur' ? 'برائے مہربانی درست رقم درج کریں۔' : 'Please select or enter a valid donation amount.',
+      });
       return;
     }
 
@@ -158,7 +163,11 @@ export default function DonateSection({ lang }: DonateSectionProps) {
           <div className="flex gap-4">
             <button
               onClick={() => {
-                alert(lang === 'ur' ? 'رسید پی ڈی ایف ڈاؤن لوڈ سمیولیٹ کی گئی ہے!' : 'Receipt PDF Download simulated!');
+                showAlert({
+                  icon: 'success',
+                  title: lang === 'ur' ? 'ڈاؤن لوڈ' : 'Download',
+                  text: lang === 'ur' ? 'رسید پی ڈی ایف ڈاؤن لوڈ سمیولیٹ کی گئی ہے!' : 'Receipt PDF Download simulated!',
+                });
               }}
               className="flex-grow bg-emerald-600 hover:bg-emerald-500 text-white font-sans font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow"
             >
