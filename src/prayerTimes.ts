@@ -26,10 +26,10 @@ export const CALCULATION_METHODS = {
 
 // Masjid's own location, used until the visitor shares theirs.
 export const DEFAULT_SETTINGS: PrayerSettings = {
-  latitude: 39.7817,
-  longitude: -89.6501,
-  city: 'Springfield, IL',
-  method: 'NorthAmerica',
+  latitude: 24.8607,
+  longitude: 67.0011,
+  city: 'Karachi',
+  method: 'Karachi',
   madhab: 'hanafi',
   // Minutes between adhan and iqamah, set by the masjid.
   iqamahOffsets: { fajr: 30, dhuhr: 20, asr: 15, maghrib: 5, isha: 15 },

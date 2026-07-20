@@ -338,7 +338,7 @@ export default function HomeSection({ lang, onNavigate }: HomeSectionProps) {
                     {t('location')}
                   </h5>
                   <p className="font-sans text-sm text-slate-200">
-                    123 Islamic Center Way, Springfield, IL 62704
+                    Al-Safa Masjid, Gulshan-e-Iqbal, Karachi, Pakistan
                   </p>
                 </div>
               </div>
