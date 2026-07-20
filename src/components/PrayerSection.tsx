@@ -1,96 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { translations } from '../translations';
-import { Language, DailyTracker, PrayerTime } from '../types';
-import { Clock, Compass, CheckCircle2, Sun, Moon } from 'lucide-react';
+import { Language, DailyTracker, PrayerSettings, PrayerStatus } from '../types';
+import {
+  computePrayers,
+  getPrayerStatus,
+  getQiblaDirection,
+  loadSettings,
+  saveSettings,
+  requestDeviceLocation,
+  prayerLabel
+} from '../prayerTimes';
+import { Clock, Compass, CheckCircle2, Sun, Moon, MapPin, LoaderCircle } from 'lucide-react';
 
 interface PrayerSectionProps {
   lang: Language;
 }
 
-const DEFAULT_PRAYERS: PrayerTime[] = [
-  { name: 'Fajr', urduName: 'فجر', time: '05:15 AM', iqamah: '05:45 AM' },
-  { name: 'Shuruq', urduName: 'طلوعِ آفتاب', time: '06:38 AM', iqamah: '-' },
-  { name: 'Dhuhr', urduName: 'ظہر', time: '01:10 PM', iqamah: '01:30 PM' },
-  { name: 'Asr', urduName: 'عصر', time: '04:45 PM', iqamah: '05:00 PM' },
-  { name: 'Maghrib', urduName: 'مغرب', time: '08:10 PM', iqamah: '08:15 PM' },
-  { name: 'Isha', urduName: 'عشاء', time: '09:30 PM', iqamah: '09:45 PM' }
-];
-
-const PRAYER_TIMES_KEY = 'alsafa_prayer_times';
-
-// Prayer timings are stored locally for now (no backend yet).
-const loadPrayerTimes = (): PrayerTime[] => {
-  try {
-    const saved = localStorage.getItem(PRAYER_TIMES_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {
-    /* fall through to defaults */
-  }
-  localStorage.setItem(PRAYER_TIMES_KEY, JSON.stringify(DEFAULT_PRAYERS));
-  return DEFAULT_PRAYERS;
-};
-
-// "05:15 AM" -> minutes since midnight
-const toMinutes = (time: string): number => {
-  const match = time.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!match) return -1;
-  let hours = parseInt(match[1], 10) % 12;
-  if (match[3].toUpperCase() === 'PM') hours += 12;
-  return hours * 60 + parseInt(match[2], 10);
-};
-
-const pad = (num: number) => num.toString().padStart(2, '0');
-
-interface PrayerStatus {
-  current: PrayerTime | null;
-  next: PrayerTime;
-  timeLeft: string;
-}
-
-// Works out which prayer is running right now and how long until the next one.
-const getPrayerStatus = (prayers: PrayerTime[], now: Date): PrayerStatus | null => {
-  // Shuruq is not a prayer, it only marks the end of Fajr's window.
-  const schedule = prayers
-    .map((p) => ({ prayer: p, minutes: toMinutes(p.time) }))
-    .filter((p) => p.minutes >= 0 && p.prayer.name !== 'Shuruq')
-    .sort((a, b) => a.minutes - b.minutes);
-
-  if (schedule.length === 0) return null;
-
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const nextIndex = schedule.findIndex((p) => p.minutes > nowMinutes);
-
-  // After Isha the next prayer is tomorrow's Fajr.
-  const next = nextIndex === -1 ? schedule[0] : schedule[nextIndex];
-  const current =
-    nextIndex === -1
-      ? schedule[schedule.length - 1]
-      : nextIndex === 0
-        ? schedule[schedule.length - 1] // before Fajr we are still in Isha's window
-        : schedule[nextIndex - 1];
-
-  let secondsLeft = next.minutes * 60 - (nowMinutes * 60 + now.getSeconds());
-  if (secondsLeft <= 0) secondsLeft += 24 * 60 * 60;
-
-  const h = Math.floor(secondsLeft / 3600);
-  const m = Math.floor((secondsLeft % 3600) / 60);
-  const s = secondsLeft % 60;
-
-  return {
-    current: current.prayer,
-    next: next.prayer,
-    timeLeft: `${pad(h)}:${pad(m)}:${pad(s)}`
-  };
-};
-
 export default function PrayerSection({ lang }: PrayerSectionProps) {
   const t = (key: keyof typeof translations['en']) => translations[lang][key];
 
-  // Tracker State
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Tracker State.
+  // toISOString() would give the UTC date, which is the previous day for anyone
+  // east of Greenwich in the early morning — so build the key from local parts.
+  const dateKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const todayStr = dateKey(new Date());
   const [tracker, setTracker] = useState<DailyTracker>(() => {
     try {
       const saved = localStorage.getItem('alsafa_prayer_tracker');
@@ -100,17 +34,80 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
     }
   });
 
-  // Prayer times (persisted locally until a backend exists)
-  const [prayers] = useState<PrayerTime[]>(loadPrayerTimes);
+  // Location + calculation settings, persisted locally until a backend exists
+  const [settings, setSettings] = useState<PrayerSettings>(loadSettings);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
-  // Live prayer status derived from the user's own clock
-  const [status, setStatus] = useState<PrayerStatus | null>(() =>
-    getPrayerStatus(prayers, new Date())
+  // Timings calculated for the visitor's own coordinates and date
+  // Keyed on todayStr so the table rolls over to the new day at midnight.
+  const prayers = useMemo(
+    () => computePrayers(settings, new Date(), lang),
+    [settings, lang, todayStr]
   );
 
-  // Compass rotation simulator
+  // Live prayer status derived from the visitor's own clock
+  const [status, setStatus] = useState<PrayerStatus>(() =>
+    getPrayerStatus(settings, new Date(), lang)
+  );
+
+  // Compass: real device heading when available, otherwise a static qibla dial
   const [compassHeading, setCompassHeading] = useState(0);
-  const qiblaAngle = 51.2; // Qibla direction for Springfield IL: 51.2 degrees
+  const [hasCompass, setHasCompass] = useState(false);
+  const qiblaAngle = useMemo(() => getQiblaDirection(settings), [settings]);
+
+  // Persist settings whenever they change
+  useEffect(() => {
+    saveSettings(settings);
+  }, [settings]);
+
+  // Read the phone's magnetometer if the browser exposes it
+  useEffect(() => {
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      // iOS exposes a ready-made compass heading; others give alpha (counter-clockwise).
+      const webkitHeading = (e as DeviceOrientationEvent & { webkitCompassHeading?: number })
+        .webkitCompassHeading;
+      const heading =
+        typeof webkitHeading === 'number'
+          ? webkitHeading
+          : e.alpha != null
+            ? 360 - e.alpha
+            : null;
+      if (heading == null) return;
+      setHasCompass(true);
+      setCompassHeading(heading);
+    };
+
+    window.addEventListener('deviceorientationabsolute', handleOrientation as EventListener);
+    window.addEventListener('deviceorientation', handleOrientation as EventListener);
+    return () => {
+      window.removeEventListener('deviceorientationabsolute', handleOrientation as EventListener);
+      window.removeEventListener('deviceorientation', handleOrientation as EventListener);
+    };
+  }, []);
+
+  const useMyLocation = async () => {
+    setLocating(true);
+    setLocationError(null);
+    try {
+      const { latitude, longitude } = await requestDeviceLocation();
+      setSettings((prev) => ({
+        ...prev,
+        latitude,
+        longitude,
+        city: lang === 'ur' ? 'آپ کا مقام' : 'Your location',
+        usingDeviceLocation: true
+      }));
+    } catch (err) {
+      setLocationError(
+        lang === 'ur'
+          ? 'مقام حاصل نہیں ہو سکا۔ مسجد کے اوقات دکھائے جا رہے ہیں۔'
+          : 'Could not get your location. Showing the masjid’s timings instead.'
+      );
+    } finally {
+      setLocating(false);
+    }
+  };
 
   // Update localStorage when tracker updates
   useEffect(() => {
@@ -155,32 +152,29 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
     todayStatus.maghrib &&
     todayStatus.isha;
 
-  // Simple countdown timer & Simulated Compass Heading cycle
+  // Tick the countdown once a second
   useEffect(() => {
     const interval = setInterval(() => {
-      // Rotate simulator gently
-      setCompassHeading((prev) => (prev + 3) % 360);
-
-      setStatus(getPrayerStatus(prayers, new Date()));
+      setStatus(getPrayerStatus(settings, new Date(), lang));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [prayers]);
+  }, [settings, lang]);
 
   // Compute stats for last 7 days
   const last7Days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    return d.toISOString().split('T')[0];
+    return dateKey(d);
   }).reverse();
 
-  const isQiblaAligned = Math.abs(compassHeading - qiblaAngle) < 10;
+  // Shortest angular distance, so 359° vs 1° counts as 2° apart rather than 358°.
+  const headingDelta = Math.abs(((compassHeading - qiblaAngle + 540) % 360) - 180);
+  const isQiblaAligned = hasCompass && headingDelta < 10;
 
-  const label = (p: PrayerTime | null | undefined) =>
-    p ? (lang === 'ur' ? p.urduName : p.name) : '';
-  const nextLabel = label(status?.next);
-  const currentLabel = label(status?.current);
-  const timeLeftStr = status?.timeLeft ?? '--:--:--';
+  const nextLabel = prayerLabel(status.next.key, lang);
+  const currentLabel = prayerLabel(status.current.key, lang);
+  const timeLeftStr = status.timeLeft;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-12 animate-fade-in text-slate-800 dark:text-slate-100">
@@ -232,8 +226,29 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
                 {t('prayerSchedule')}
               </h3>
               <p className="font-sans text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                Springfield, IL • {new Date().toLocaleDateString(lang === 'ur' ? 'ur-PK' : 'en-US')}
+                {settings.city} • {new Date().toLocaleDateString(lang === 'ur' ? 'ur-PK' : 'en-US')}
               </p>
+              <button
+                onClick={useMyLocation}
+                disabled={locating}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-sans font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 disabled:opacity-50 cursor-pointer"
+              >
+                {locating ? (
+                  <LoaderCircle className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <MapPin className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {settings.usingDeviceLocation
+                    ? lang === 'ur' ? 'مقام دوبارہ حاصل کریں' : 'Refresh my location'
+                    : lang === 'ur' ? 'میرے مقام کے اوقات دکھائیں' : 'Use my location'}
+                </span>
+              </button>
+              {locationError && (
+                <p className="font-sans text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  {locationError}
+                </p>
+              )}
             </div>
             <span className="font-sans text-xs bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 py-1.5 px-3 rounded-full font-semibold">
               Adhan vs {t('iqamah')}
@@ -254,7 +269,7 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
                   <tr
                     key={idx}
                     className={`transition-colors ${
-                      status?.current?.name === p.name
+                      status.current.key === p.key
                         ? 'bg-emerald-50 dark:bg-emerald-950/40'
                         : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/40'
                     }`}
@@ -303,33 +318,34 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
               <span className="absolute bottom-2 font-mono font-bold text-xs text-slate-400">{t('south')}</span>
               <span className="absolute left-2 font-mono font-bold text-xs text-slate-400">{t('west')}</span>
 
-              {/* Kaaba Angle Marker (Locked at 51.2 degrees) */}
-              <div 
-                className="absolute w-1 h-full pointer-events-none"
-                style={{ transform: `rotate(${qiblaAngle}deg)` }}
+              {/* Kaaba marker — true bearing from the visitor's coordinates.
+                  Without a compass the dial is drawn north-up, so the marker
+                  sits at the qibla bearing itself; with one it rotates with the device. */}
+              <div
+                className="absolute w-1 h-full pointer-events-none transition-transform duration-300"
+                style={{ transform: `rotate(${hasCompass ? qiblaAngle - compassHeading : qiblaAngle}deg)` }}
               >
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center text-[8px] font-bold text-slate-950 shadow">
                   🕋
                 </div>
               </div>
 
-              {/* Dial (Compass Arrow rotates simulating user phone movement) */}
+              {/* Dial — rotates with the device heading when a compass is present */}
               <div
-                className="absolute w-36 h-36 border border-emerald-500/20 rounded-full transition-transform duration-500"
-                style={{ transform: `rotate(${-compassHeading}deg)` }}
+                className="absolute w-36 h-36 border border-emerald-500/20 rounded-full transition-transform duration-300"
+                style={{ transform: `rotate(${hasCompass ? -compassHeading : 0}deg)` }}
               >
-                {/* Simulated heading arrow */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-16 bg-gradient-to-b from-emerald-600 to-transparent rounded-full"></div>
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-4 bg-emerald-600 rounded-full border-2 border-white dark:border-slate-900 shadow"></div>
               </div>
 
               {/* Central status ring */}
               <div className={`absolute w-16 h-16 rounded-full flex items-center justify-center border-2 transition-all ${
-                isQiblaAligned 
-                  ? 'bg-amber-400 border-amber-500 scale-110 text-slate-950 font-bold' 
+                isQiblaAligned
+                  ? 'bg-amber-400 border-amber-500 scale-110 text-slate-950 font-bold'
                   : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-300 text-xs'
               }`}>
-                {isQiblaAligned ? '51° 🕋' : `${Math.round(compassHeading)}°`}
+                {Math.round(qiblaAngle)}° 🕋
               </div>
             </div>
 
@@ -337,6 +353,14 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
               <div className="mt-4 text-emerald-600 dark:text-emerald-400 font-sans font-semibold text-xs sm:text-sm animate-pulse">
                 ★ {lang === 'ur' ? 'قبلہ کی سمت درست ہے!' : 'Aligned with Qibla!'}
               </div>
+            )}
+
+            {!hasCompass && (
+              <p className="mt-4 font-sans text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 text-center max-w-[16rem]">
+                {lang === 'ur'
+                  ? `اس آلے میں قطب نما دستیاب نہیں۔ شمال کی طرف رخ کر کے ${Math.round(qiblaAngle)}° پر مڑیں۔`
+                  : `No compass on this device — face north, then turn ${Math.round(qiblaAngle)}° clockwise.`}
+              </p>
             )}
           </div>
 
@@ -370,8 +394,7 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           {(['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'tahajjud'] as const).map((pKey) => {
             const isCompleted = todayStatus[pKey];
-            const pName = pKey === 'tahajjud' ? t('tahajjud') : prayers.find(p => p.name.toLowerCase() === pKey)?.name || pKey;
-            const pUrName = pKey === 'tahajjud' ? t('tahajjud') : prayers.find(p => p.name.toLowerCase() === pKey)?.urduName || pKey;
+            const pLabel = pKey === 'tahajjud' ? t('tahajjud') : prayerLabel(pKey, lang);
 
             return (
               <button
@@ -388,7 +411,7 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
                 </div>
                 <div>
                   <span className="font-sans font-bold text-sm sm:text-base block">
-                    {lang === 'ur' ? pUrName : pName}
+                    {pLabel}
                   </span>
                   <span className={`font-sans text-[10px] sm:text-xs ${isCompleted ? 'text-emerald-100' : 'text-slate-400'}`}>
                     {isCompleted ? t('markedCompleted') : t('markedMissed')}
@@ -408,7 +431,13 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
             {last7Days.map((day) => {
               const dObj = tracker[day] || {};
               const count = Object.values(dObj).filter(Boolean).length;
-              const dateLabel = new Date(day).toLocaleDateString(lang === 'ur' ? 'ur-PK' : 'en', { weekday: 'short' });
+              // "2026-07-21" parses as UTC midnight, which lands on the previous
+              // day in western timezones — so split it and build a local date.
+              const [y, mo, dd] = day.split('-').map(Number);
+              const dateLabel = new Date(y, mo - 1, dd).toLocaleDateString(
+                lang === 'ur' ? 'ur-PK' : 'en',
+                { weekday: 'short' }
+              );
               return (
                 <div key={day} className="text-center space-y-2">
                   <div className="h-16 bg-slate-100 dark:bg-slate-950 rounded-lg flex flex-col justify-end overflow-hidden border border-slate-200/50 dark:border-slate-800">

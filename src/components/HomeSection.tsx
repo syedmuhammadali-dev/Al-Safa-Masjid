@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { translations } from '../translations';
 import { Language } from '../types';
+import { computePrayers, getPrayerStatus, loadSettings } from '../prayerTimes';
 import { Heart, Calendar, MapPin, Mail, BookOpen, Users, Sparkles, Clock, Phone, ChevronRight } from 'lucide-react';
 
 interface HomeSectionProps {
@@ -21,6 +22,25 @@ export default function HomeSection({ lang, onNavigate }: HomeSectionProps) {
 
   // Imam Modal state
   const [showImamModal, setShowImamModal] = useState(false);
+
+  // Live prayer times, shared with the prayer section via localStorage settings
+  const settings = useMemo(() => loadSettings(), []);
+  const [now, setNow] = useState(() => new Date());
+
+  // A minute is precise enough for the summary bar.
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const quickPrayers = useMemo(
+    () => computePrayers(settings, now, lang).filter((p) => p.key !== 'sunrise'),
+    [settings, now, lang]
+  );
+  const nextPrayerKey = useMemo(
+    () => getPrayerStatus(settings, now, lang).next.key,
+    [settings, now, lang]
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,37 +102,34 @@ export default function HomeSection({ lang, onNavigate }: HomeSectionProps) {
       {/* Quick Prayer Times Bar */}
       <div className="relative -mt-24 z-20 px-4 max-w-7xl mx-auto">
         <div className="bg-white/80 dark:bg-slate-900/90 backdrop-blur-md rounded-3xl p-6 sm:p-8 grid grid-cols-2 md:grid-cols-5 gap-4 sm:gap-6 shadow-xl border border-emerald-500/10 dark:border-emerald-500/20">
-          {[
-            { key: 'fajr', name: t('fajr'), time: '05:15 AM' },
-            { key: 'dhuhr', name: t('dhuhr'), time: '01:10 PM' },
-            { key: 'asr', name: t('asr'), time: '04:45 PM' },
-            { key: 'maghrib', name: t('maghrib'), time: '08:10 PM', highlight: true },
-            { key: 'isha', name: t('isha'), time: '09:30 PM' }
-          ].map((item, idx) => (
+          {quickPrayers.map((item) => {
+            const highlight = item.key === nextPrayerKey;
+            return (
             <div
-              key={idx}
+              key={item.key}
               onClick={() => onNavigate('prayerTimes')}
               className={`text-center p-4 rounded-2xl transition-all cursor-pointer ${
-                item.highlight
+                highlight
                   ? 'bg-emerald-500/10 dark:bg-emerald-500/20 ring-2 ring-emerald-500/50 scale-105 relative'
                   : 'hover:bg-emerald-500/5 dark:hover:bg-slate-800'
               }`}
             >
-              {item.highlight && (
+              {highlight && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 font-sans font-bold text-[10px] uppercase px-3 py-0.5 rounded-full tracking-wider shadow">
                   {t('nextPrayer')}
                 </div>
               )}
               <span className="font-sans font-medium text-xs sm:text-sm text-slate-500 dark:text-slate-400 block mb-1">
-                {item.name}
+                {lang === 'ur' ? item.urduName : item.name}
               </span>
               <span className={`font-display text-lg sm:text-xl font-bold ${
-                item.highlight ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-200'
+                highlight ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-200'
               }`}>
                 {item.time}
               </span>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

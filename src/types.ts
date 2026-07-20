@@ -1,10 +1,42 @@
 export type Language = 'en' | 'ur';
 
+export type PrayerKey = 'fajr' | 'sunrise' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
+
 export interface PrayerTime {
+  key: PrayerKey;
   name: string;
   urduName: string;
+  /** Adhan time as an absolute instant, used for countdowns and comparisons. */
+  at: Date;
+  /** Iqamah instant, or null for Shuruq which has no congregation. */
+  iqamahAt: Date | null;
+  /** Localised display strings derived from `at` / `iqamahAt`. */
   time: string;
   iqamah: string;
+}
+
+export interface PrayerSettings {
+  latitude: number;
+  longitude: number;
+  city: string;
+  method: string;
+  madhab: 'hanafi' | 'shafi';
+  iqamahOffsets: {
+    fajr: number;
+    dhuhr: number;
+    asr: number;
+    maghrib: number;
+    isha: number;
+  };
+  usingDeviceLocation: boolean;
+}
+
+export interface PrayerStatus {
+  current: PrayerTime;
+  next: PrayerTime;
+  /** HH:MM:SS until the next adhan. */
+  timeLeft: string;
+  secondsLeft: number;
 }
 
 export interface DailyTracker {
