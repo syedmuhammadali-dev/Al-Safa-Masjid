@@ -7,7 +7,7 @@ interface PrayerSectionProps {
   lang: Language;
 }
 
-const BASE_PRAYERS: PrayerTime[] = [
+const DEFAULT_PRAYERS: PrayerTime[] = [
   { name: 'Fajr', urduName: 'فجر', time: '05:15 AM', iqamah: '05:45 AM' },
   { name: 'Shuruq', urduName: 'طلوعِ آفتاب', time: '06:38 AM', iqamah: '-' },
   { name: 'Dhuhr', urduName: 'ظہر', time: '01:10 PM', iqamah: '01:30 PM' },
@@ -15,6 +15,76 @@ const BASE_PRAYERS: PrayerTime[] = [
   { name: 'Maghrib', urduName: 'مغرب', time: '08:10 PM', iqamah: '08:15 PM' },
   { name: 'Isha', urduName: 'عشاء', time: '09:30 PM', iqamah: '09:45 PM' }
 ];
+
+const PRAYER_TIMES_KEY = 'alsafa_prayer_times';
+
+// Prayer timings are stored locally for now (no backend yet).
+const loadPrayerTimes = (): PrayerTime[] => {
+  try {
+    const saved = localStorage.getItem(PRAYER_TIMES_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {
+    /* fall through to defaults */
+  }
+  localStorage.setItem(PRAYER_TIMES_KEY, JSON.stringify(DEFAULT_PRAYERS));
+  return DEFAULT_PRAYERS;
+};
+
+// "05:15 AM" -> minutes since midnight
+const toMinutes = (time: string): number => {
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return -1;
+  let hours = parseInt(match[1], 10) % 12;
+  if (match[3].toUpperCase() === 'PM') hours += 12;
+  return hours * 60 + parseInt(match[2], 10);
+};
+
+const pad = (num: number) => num.toString().padStart(2, '0');
+
+interface PrayerStatus {
+  current: PrayerTime | null;
+  next: PrayerTime;
+  timeLeft: string;
+}
+
+// Works out which prayer is running right now and how long until the next one.
+const getPrayerStatus = (prayers: PrayerTime[], now: Date): PrayerStatus | null => {
+  // Shuruq is not a prayer, it only marks the end of Fajr's window.
+  const schedule = prayers
+    .map((p) => ({ prayer: p, minutes: toMinutes(p.time) }))
+    .filter((p) => p.minutes >= 0 && p.prayer.name !== 'Shuruq')
+    .sort((a, b) => a.minutes - b.minutes);
+
+  if (schedule.length === 0) return null;
+
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const nextIndex = schedule.findIndex((p) => p.minutes > nowMinutes);
+
+  // After Isha the next prayer is tomorrow's Fajr.
+  const next = nextIndex === -1 ? schedule[0] : schedule[nextIndex];
+  const current =
+    nextIndex === -1
+      ? schedule[schedule.length - 1]
+      : nextIndex === 0
+        ? schedule[schedule.length - 1] // before Fajr we are still in Isha's window
+        : schedule[nextIndex - 1];
+
+  let secondsLeft = next.minutes * 60 - (nowMinutes * 60 + now.getSeconds());
+  if (secondsLeft <= 0) secondsLeft += 24 * 60 * 60;
+
+  const h = Math.floor(secondsLeft / 3600);
+  const m = Math.floor((secondsLeft % 3600) / 60);
+  const s = secondsLeft % 60;
+
+  return {
+    current: current.prayer,
+    next: next.prayer,
+    timeLeft: `${pad(h)}:${pad(m)}:${pad(s)}`
+  };
+};
 
 export default function PrayerSection({ lang }: PrayerSectionProps) {
   const t = (key: keyof typeof translations['en']) => translations[lang][key];
@@ -30,9 +100,13 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
     }
   });
 
-  // Countdown State
-  const [timeLeftStr, setTimeLeftStr] = useState('02:44:12');
-  const [nextPrayerName, setNextPrayerName] = useState('Maghrib');
+  // Prayer times (persisted locally until a backend exists)
+  const [prayers] = useState<PrayerTime[]>(loadPrayerTimes);
+
+  // Live prayer status derived from the user's own clock
+  const [status, setStatus] = useState<PrayerStatus | null>(() =>
+    getPrayerStatus(prayers, new Date())
+  );
 
   // Compass rotation simulator
   const [compassHeading, setCompassHeading] = useState(0);
@@ -87,19 +161,11 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
       // Rotate simulator gently
       setCompassHeading((prev) => (prev + 3) % 360);
 
-      // Countdown simulation - count down seconds dynamically
-      const now = new Date();
-      const s = 59 - now.getSeconds();
-      const m = 59 - now.getMinutes();
-      // Mock countdown target
-      const h = (20 - now.getHours() + 24) % 24;
-
-      const pad = (num: number) => num.toString().padStart(2, '0');
-      setTimeLeftStr(`${pad(h)}:${pad(m)}:${pad(s)}`);
+      setStatus(getPrayerStatus(prayers, new Date()));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [prayers]);
 
   // Compute stats for last 7 days
   const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -110,17 +176,32 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
 
   const isQiblaAligned = Math.abs(compassHeading - qiblaAngle) < 10;
 
+  const label = (p: PrayerTime | null | undefined) =>
+    p ? (lang === 'ur' ? p.urduName : p.name) : '';
+  const nextLabel = label(status?.next);
+  const currentLabel = label(status?.current);
+  const timeLeftStr = status?.timeLeft ?? '--:--:--';
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-12 animate-fade-in text-slate-800 dark:text-slate-100">
       
       {/* Dynamic Header & Countdown */}
       <div className="bg-gradient-to-r from-emerald-950 to-emerald-900 rounded-3xl p-8 text-white grid grid-cols-1 lg:grid-cols-12 gap-8 items-center shadow-xl">
         <div className="lg:col-span-7 space-y-4">
-          <span className="bg-amber-500/20 text-amber-300 font-sans font-semibold text-xs tracking-wider uppercase px-3 py-1 rounded-full">
-            {t('nextPrayer')}: {lang === 'ur' ? 'مغرب' : 'Maghrib'}
-          </span>
+          <div className="flex flex-wrap gap-2">
+            <span className="bg-amber-500/20 text-amber-300 font-sans font-semibold text-xs tracking-wider uppercase px-3 py-1 rounded-full">
+              {t('nextPrayer')}: {nextLabel}
+            </span>
+            {currentLabel && (
+              <span className="bg-emerald-500/20 text-emerald-200 font-sans font-semibold text-xs tracking-wider uppercase px-3 py-1 rounded-full">
+                {lang === 'ur' ? 'ابھی جاری' : 'Current'}: {currentLabel}
+              </span>
+            )}
+          </div>
           <h2 className="font-display text-3xl sm:text-4xl font-bold leading-tight">
-            {lang === 'ur' ? 'اگلی نماز میں وقت باقی ہے' : 'Time remaining until Maghrib'}
+            {lang === 'ur'
+              ? `${nextLabel} میں وقت باقی ہے`
+              : `Time remaining until ${nextLabel}`}
           </h2>
           <p className="font-sans text-sm text-emerald-200/90 leading-relaxed">
             {lang === 'ur' 
@@ -169,8 +250,15 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100/50 dark:divide-slate-800/50 font-sans text-sm sm:text-base">
-                {BASE_PRAYERS.map((p, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                {prayers.map((p, idx) => (
+                  <tr
+                    key={idx}
+                    className={`transition-colors ${
+                      status?.current?.name === p.name
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40'
+                        : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/40'
+                    }`}
+                  >
                     <td className="py-4 font-semibold text-emerald-950 dark:text-emerald-300">
                       {lang === 'ur' ? p.urduName : p.name}
                     </td>
@@ -282,8 +370,8 @@ export default function PrayerSection({ lang }: PrayerSectionProps) {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           {(['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'tahajjud'] as const).map((pKey) => {
             const isCompleted = todayStatus[pKey];
-            const pName = pKey === 'tahajjud' ? t('tahajjud') : BASE_PRAYERS.find(p => p.name.toLowerCase() === pKey)?.name || pKey;
-            const pUrName = pKey === 'tahajjud' ? t('tahajjud') : BASE_PRAYERS.find(p => p.name.toLowerCase() === pKey)?.urduName || pKey;
+            const pName = pKey === 'tahajjud' ? t('tahajjud') : prayers.find(p => p.name.toLowerCase() === pKey)?.name || pKey;
+            const pUrName = pKey === 'tahajjud' ? t('tahajjud') : prayers.find(p => p.name.toLowerCase() === pKey)?.urduName || pKey;
 
             return (
               <button
